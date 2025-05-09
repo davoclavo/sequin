@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FullPageForm from "$lib/components/FullPageForm.svelte";
   import {
     Select,
     SelectContent,
@@ -114,11 +115,21 @@
   };
   let selectedMessageIndex = 0;
 
-  let isEditing = form.id !== null;
+  let isEditMode = form.id !== null;
   let functionEditorElement: HTMLElement;
   let functionEditorView: EditorView;
 
   let copyTimeout: ReturnType<typeof setTimeout>;
+
+  let isDirty = false;
+
+  $: {
+    if (form.transform.code) {
+      isDirty =
+        form.transform.code !==
+        initialCodeFor(form.transform.type, form.transform.sink_type);
+    }
+  }
 
   // CodeMirror custom completions for Elixir code
   const elixirCompletions = (context) => {
@@ -213,6 +224,10 @@
         saving = false;
       });
     }
+  }
+
+  function handleClose() {
+    pushEvent("form_closed");
   }
 
   function handleTypeSelect(event: any, oldType: string) {
@@ -372,7 +387,7 @@
 
   onMount(() => {
     // Handle URL parameters for new transforms
-    if (!isEditing) {
+    if (!isEditMode) {
       const urlParams = new URLSearchParams(window.location.search);
 
       const typeParam = urlParams.get("type");
@@ -478,212 +493,268 @@ Please help me create or modify the Elixir function transform to achieve the des
   });
 </script>
 
-<div class="flex flex-col h-full gap-4 max-w-screen-2xl mx-auto">
-  <h1 class="text-2xl font-semibold tracking-tight">
-    {#if isEditing}
-      Edit Function
-    {:else}
-      New Function
-    {/if}
-  </h1>
-  <div
-    class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
-  >
-    <div class="p-4 border-b border-slate-200 dark:border-slate-800">
-      <div class="flex justify-between items-center">
-        <h2 class="text-lg font-semibold tracking-tight">
-          Function Configuration
-        </h2>
-        <a
-          href="https://sequinstream.com/docs/reference/transforms"
-          target="_blank"
-        >
-          <Button variant="outline" size="sm">
-            <BookText class="h-3 w-3 mr-1" />
-            Docs
-          </Button>
-        </a>
-      </div>
-    </div>
-    <div class="p-4">
-      <form on:submit={handleSubmit} class="space-y-4">
-        <div class="space-y-2">
-          <div class="flex items-center gap-2">
-            <Label for="name">Function name</Label>
-            <Popover>
-              <PopoverTrigger>
-                <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              </PopoverTrigger>
-              <PopoverContent
-                class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
-              >
-                <div class="text-sm space-y-2">
-                  <p class="text-slate-500 dark:text-slate-400">
-                    Give your transform a descriptive name to help identify its
-                    purpose.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <Input
-            id="name"
-            bind:value={form.name}
-            placeholder="e.g. id-only-transform"
-            class="max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
-          />
-          {#if showErrors && formErrors.name}
-            <p class="text-sm text-red-500 dark:text-red-400">
-              {formErrors.name[0]}
-            </p>
-          {/if}
-        </div>
-
-        <div class="space-y-2 max-w-xl">
-          <div class="flex items-center gap-2">
-            <Label for="type">Function type</Label>
-            <Popover>
-              <PopoverTrigger>
-                <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              </PopoverTrigger>
-              <PopoverContent
-                class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
-              >
-                <div class="text-sm space-y-2">
-                  <p class="text-slate-500 dark:text-slate-400">
-                    Select the type of transform you want to create.
-                  </p>
-
-                  <ul
-                    class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400"
-                  >
-                    <li>
-                      <code class="font-mono">path</code> - Extract data from a specific
-                      path in the message.
-                    </li>
-                    <li>
-                      <code class="font-mono">function</code> - Transform the message
-                      and other properties of the request with Elixir code.
-                    </li>
-                  </ul>
-
-                  <p class="text-slate-500 dark:text-slate-400">
-                    Read more in our <a
-                      href="https://sequinstream.com/docs/reference/transforms"
-                      class="text-blue-500 dark:text-blue-400"
-                      target="_blank">documentation</a
-                    >.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <Select
-            onSelectedChange={(event) => {
-              const old = form.transform.type;
-              handleTypeSelect(event, old);
-            }}
-            selected={{
-              value: form.transform.type,
-              label: transformInternalToExternal[form.transform.type],
-            }}
-            disabled={isEditing}
+<FullPageForm
+  title={isEditMode ? "Edit Function" : "New Function"}
+  showConfirmOnExit={isDirty}
+  on:close={handleClose}
+>
+  <!-- <div class="p-4 border-b border-slate-200 dark:border-slate-800">
+           <div class="flex justify-between items-center">
+           <h2 class="text-lg font-semibold tracking-tight">
+           Function Configuration
+           </h2>
+           <a
+           href="https://sequinstream.com/docs/reference/transforms"
+           target="_blank"
+           >
+           <Button variant="outline" size="sm">
+           <BookText class="h-3 w-3 mr-1" />
+           Docs
+           </Button>
+           </a>
+           </div>
+           </div> -->
+  <form on:submit={handleSubmit} class="space-y-4">
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <Label for="name">Function name</Label>
+        <Popover>
+          <PopoverTrigger>
+            <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          </PopoverTrigger>
+          <PopoverContent
+            class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a transform type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                value="path"
-                label={transformInternalToExternal.path}
-              />
-              <SelectItem
-                value="function"
-                label={transformInternalToExternal.function}
-              />
-              <SelectItem
-                value="routing"
-                label={transformInternalToExternal.routing}
-              />
-            </SelectContent>
-          </Select>
-          {#if showErrors && formErrors.transform?.type}
-            <p class="text-sm text-red-500 dark:text-red-400">
-              {formErrors.transform.type[0]}
-            </p>
-          {/if}
-
-          {#if form.transform.type === "routing"}
-            <Select
-              onSelectedChange={(event) => {
-                const oldSinkType = form.transform.sink_type;
-                handleRoutingSinkTypeSelect(event, oldSinkType);
-              }}
-              selected={{
-                value: form.transform.sink_type,
-                label: sinkTypeInternalToExternal[form.transform.sink_type],
-              }}
-              disabled={isEditing}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a sink type for routing..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  value="http_push"
-                  label={sinkTypeInternalToExternal.http_push}
-                />
-                <SelectItem
-                  value="redis_string"
-                  label={sinkTypeInternalToExternal.redis_string}
-                />
-              </SelectContent>
-            </Select>
-            {#if showErrors && formErrors.transform?.type}
-              <p class="text-sm text-red-500 dark:text-red-400">
-                {formErrors.transform.type[0]}
+            <div class="text-sm space-y-2">
+              <p class="text-slate-500 dark:text-slate-400">
+                Give your transform a descriptive name to help identify its
+                purpose.
               </p>
-            {/if}
-          {/if}
-        </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+      <Input
+        id="name"
+        bind:value={form.name}
+        placeholder="e.g. id-only-transform"
+        class="max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
+      />
+      {#if showErrors && formErrors.name}
+        <p class="text-sm text-red-500 dark:text-red-400">
+          {formErrors.name[0]}
+        </p>
+      {/if}
+    </div>
 
-        <div class="space-y-2">
-          <div class="flex items-center gap-2">
-            <Label for="description">Description</Label>
-            <Popover>
-              <PopoverTrigger>
-                <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              </PopoverTrigger>
-              <PopoverContent
-                class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+    <div class="space-y-2 max-w-xl">
+      <div class="flex items-center gap-2">
+        <Label for="type">Function type</Label>
+        <Popover>
+          <PopoverTrigger>
+            <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          </PopoverTrigger>
+          <PopoverContent
+            class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+          >
+            <div class="text-sm space-y-2">
+              <p class="text-slate-500 dark:text-slate-400">
+                Select the type of transform you want to create.
+              </p>
+
+              <ul
+                class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400"
               >
-                <div class="text-sm space-y-2">
-                  <p class="text-slate-500 dark:text-slate-400">
-                    Add a description to explain what this transform does and
-                    how it should be used.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <textarea
-            id="description"
-            bind:value={form.description}
-            placeholder="e.g. Extracts only the ID field from the record"
-            class="w-full min-h-[100px] max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 rounded-md p-2 resize-y"
-          ></textarea>
-          {#if showErrors && formErrors.description}
-            <p class="text-sm text-red-500 dark:text-red-400">
-              {formErrors.description[0]}
-            </p>
-          {/if}
-        </div>
+                <li>
+                  <code class="font-mono">path</code> - Extract data from a specific
+                  path in the message.
+                </li>
+                <li>
+                  <code class="font-mono">function</code> - Transform the message
+                  and other properties of the request with Elixir code.
+                </li>
+              </ul>
 
-        {#if form.transform.type === "path"}
-          <div class="space-y-2">
+              <p class="text-slate-500 dark:text-slate-400">
+                Read more in our <a
+                  href="https://sequinstream.com/docs/reference/transforms"
+                  class="text-blue-500 dark:text-blue-400"
+                  target="_blank">documentation</a
+                >.
+              </p>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <Select
+        onSelectedChange={(event) => {
+          const old = form.transform.type;
+          handleTypeSelect(event, old);
+        }}
+        selected={{
+          value: form.transform.type,
+          label: transformInternalToExternal[form.transform.type],
+        }}
+        disabled={isEditMode}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select a transform type" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="path" label={transformInternalToExternal.path} />
+          <SelectItem
+            value="function"
+            label={transformInternalToExternal.function}
+          />
+          <SelectItem
+            value="routing"
+            label={transformInternalToExternal.routing}
+          />
+        </SelectContent>
+      </Select>
+      {#if showErrors && formErrors.transform?.type}
+        <p class="text-sm text-red-500 dark:text-red-400">
+          {formErrors.transform.type[0]}
+        </p>
+      {/if}
+
+      {#if form.transform.type === "routing"}
+        <Select
+          onSelectedChange={(event) => {
+            const oldSinkType = form.transform.sink_type;
+            handleRoutingSinkTypeSelect(event, oldSinkType);
+          }}
+          selected={{
+            value: form.transform.sink_type,
+            label: sinkTypeInternalToExternal[form.transform.sink_type],
+          }}
+          disabled={isEditMode}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a sink type for routing..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              value="http_push"
+              label={sinkTypeInternalToExternal.http_push}
+            />
+            <SelectItem
+              value="redis_string"
+              label={sinkTypeInternalToExternal.redis_string}
+            />
+          </SelectContent>
+        </Select>
+        {#if showErrors && formErrors.transform?.type}
+          <p class="text-sm text-red-500 dark:text-red-400">
+            {formErrors.transform.type[0]}
+          </p>
+        {/if}
+      {/if}
+    </div>
+
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <Label for="description">Description</Label>
+        <Popover>
+          <PopoverTrigger>
+            <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          </PopoverTrigger>
+          <PopoverContent
+            class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+          >
+            <div class="text-sm space-y-2">
+              <p class="text-slate-500 dark:text-slate-400">
+                Add a description to explain what this transform does and how it
+                should be used.
+              </p>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+      <textarea
+        id="description"
+        bind:value={form.description}
+        placeholder="e.g. Extracts only the ID field from the record"
+        class="w-full min-h-[100px] max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 rounded-md p-2 resize-y"
+      ></textarea>
+      {#if showErrors && formErrors.description}
+        <p class="text-sm text-red-500 dark:text-red-400">
+          {formErrors.description[0]}
+        </p>
+      {/if}
+    </div>
+
+    {#if form.transform.type === "path"}
+      <div class="space-y-2">
+        <div class="flex items-center gap-2">
+          <Label for="path">Transform Path</Label>
+          <Popover>
+            <PopoverTrigger>
+              <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            </PopoverTrigger>
+            <PopoverContent
+              class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+            >
+              <div class="text-sm space-y-2">
+                <p class="text-slate-500 dark:text-slate-400">
+                  Enter a path to extract data from the message. Valid paths
+                  must start with one of the following:
+                </p>
+                <ul
+                  class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400"
+                >
+                  <li>record - The main record data</li>
+                  <li>changes - The changes made to the record</li>
+                  <li>action - The type of change (insert/update/delete)</li>
+                  <li>metadata - Additional metadata about the change</li>
+                </ul>
+                <p class="text-slate-500 dark:text-slate-400">
+                  For example, <code class="font-mono">record.id</code> to extract
+                  the id from the main record.
+                </p>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <Input
+          id="path"
+          bind:value={form.transform.path}
+          placeholder="e.g. record.id or changes.name"
+          class="font-mono max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
+        />
+        {#if showErrors && formErrors.transform?.path}
+          <p class="text-sm text-red-500 dark:text-red-400">
+            {formErrors.transform.path[0]}
+          </p>
+        {/if}
+      </div>
+    {/if}
+
+    <div
+      hidden={form.transform.type !== "function" &&
+        form.transform.type !== "routing"}
+    >
+      <div class="space-y-2">
+        {#if !functionTransformsEnabled}
+          <div
+            class="flex w-fit items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md"
+          >
+            <Info class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5" />
+            <div class="flex flex-col gap-1">
+              <p class="text-sm text-blue-700 dark:text-blue-300">
+                Function transforms are not enabled in Cloud.
+              </p>
+              <p class="text-sm text-blue-700 dark:text-blue-300">
+                Talk to the Sequin team if you are interested in trying them
+                out.
+              </p>
+            </div>
+          </div>
+        {:else}
+          <div class="max-w-3xl">
             <div class="flex items-center gap-2">
-              <Label for="path">Transform Path</Label>
+              <Label for="function">Function transform</Label>
               <Popover>
                 <PopoverTrigger>
                   <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -693,214 +764,135 @@ Please help me create or modify the Elixir function transform to achieve the des
                 >
                   <div class="text-sm space-y-2">
                     <p class="text-slate-500 dark:text-slate-400">
-                      Enter a path to extract data from the message. Valid paths
-                      must start with one of the following:
+                      Enter Elixir code that defines a function to transform the
+                      message.
                     </p>
-                    <ul
-                      class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400"
-                    >
-                      <li>record - The main record data</li>
-                      <li>changes - The changes made to the record</li>
-                      <li>
-                        action - The type of change (insert/update/delete)
-                      </li>
-                      <li>metadata - Additional metadata about the change</li>
-                    </ul>
                     <p class="text-slate-500 dark:text-slate-400">
-                      For example, <code class="font-mono">record.id</code> to extract
-                      the id from the main record.
+                      Read more about the <a
+                        href="https://sequinstream.com/docs/reference/transforms#function-transform"
+                        class="text-blue-500 dark:text-blue-400"
+                        target="_blank">function transform</a
+                      > in our documentation.
                     </p>
                   </div>
                 </PopoverContent>
               </Popover>
+              <a
+                href="https://sequinstream.com/docs/reference/transforms#function-transform"
+                target="_blank"
+                class="ml-auto text-sm text-blue-500 dark:text-blue-400 hover:underline"
+              >
+                Read the docs
+              </a>
             </div>
-            <Input
-              id="path"
-              bind:value={form.transform.path}
-              placeholder="e.g. record.id or changes.name"
-              class="font-mono max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
-            />
-            {#if showErrors && formErrors.transform?.path}
-              <p class="text-sm text-red-500 dark:text-red-400">
-                {formErrors.transform.path[0]}
-              </p>
-            {/if}
+            <div
+              bind:this={functionEditorElement}
+              class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden"
+            ></div>
+
+            <p class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400">
+              {#if formErrors.transform?.code}
+                {formErrors.transform.code[0]}
+              {/if}
+            </p>
           </div>
         {/if}
-
-        <div
-          hidden={form.transform.type !== "function" &&
-            form.transform.type !== "routing"}
-        >
-          <div class="space-y-2">
-            {#if !functionTransformsEnabled}
-              <div
-                class="flex w-fit items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md"
-              >
-                <Info class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5" />
-                <div class="flex flex-col gap-1">
-                  <p class="text-sm text-blue-700 dark:text-blue-300">
-                    Function transforms are not enabled in Cloud.
-                  </p>
-                  <p class="text-sm text-blue-700 dark:text-blue-300">
-                    Talk to the Sequin team if you are interested in trying them
-                    out.
-                  </p>
-                </div>
-              </div>
-            {:else}
-              <div class="max-w-3xl">
-                <div class="flex items-center gap-2">
-                  <Label for="function">Function transform</Label>
-                  <Popover>
-                    <PopoverTrigger>
-                      <Info
-                        class="w-4 h-4 text-slate-500 dark:text-slate-400"
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent
-                      class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
-                    >
-                      <div class="text-sm space-y-2">
-                        <p class="text-slate-500 dark:text-slate-400">
-                          Enter Elixir code that defines a function to transform
-                          the message.
-                        </p>
-                        <p class="text-slate-500 dark:text-slate-400">
-                          Read more about the <a
-                            href="https://sequinstream.com/docs/reference/transforms#function-transform"
-                            class="text-blue-500 dark:text-blue-400"
-                            target="_blank">function transform</a
-                          > in our documentation.
-                        </p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <a
-                    href="https://sequinstream.com/docs/reference/transforms#function-transform"
-                    target="_blank"
-                    class="ml-auto text-sm text-blue-500 dark:text-blue-400 hover:underline"
-                  >
-                    Read the docs
-                  </a>
-                </div>
-                <div
-                  bind:this={functionEditorElement}
-                  class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden"
-                ></div>
-
-                <p
-                  class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400"
-                >
-                  {#if formErrors.transform?.code}
-                    {formErrors.transform.code[0]}
-                  {/if}
-                </p>
-              </div>
-            {/if}
-          </div>
-        </div>
-
-        <div class="flex gap-2 pt-2">
-          {#if form.transform.type === "function"}
-            <CopyToClipboard
-              textFn={handleCopyForChatGPT}
-              buttonText="Copy for ChatGPT"
-              successText="Copied to clipboard"
-              buttonVariant="magic"
-              buttonSize="default"
-              className="w-48"
-            />
-          {/if}
-
-          <AlertDialog bind:open={showUpdateDialog}>
-            <Button
-              type="submit"
-              loading={validating || saving}
-              disabled={validating || saving}
-            >
-              <span slot="loading">
-                {#if saving}
-                  {isEditing ? "Updating..." : "Creating..."}
-                {:else}
-                  Validating...
-                {/if}
-              </span>
-              {#if isEditing}
-                Update Function
-              {:else}
-                Create Function
-              {/if}
-            </Button>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Update Function</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This function is currently being used by the following
-                  consumers:
-                  <ul class="list-disc pl-4 mt-2 space-y-1">
-                    {#each usedByConsumers as consumer}
-                      <li class="font-mono">{consumer.name}</li>
-                    {/each}
-                  </ul>
-                  <p class="mt-2">
-                    Are you sure you want to update this function? This may
-                    affect the behavior of these consumers.
-                  </p>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  on:click={() => {
-                    saving = true;
-                    pushEvent("save", { transform: form }, () => {
-                      saving = false;
-                    });
-                  }}
-                >
-                  Update Function
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {#if isEditing}
-            <AlertDialog bind:open={showDeleteDialog}>
-              <Button
-                type="button"
-                variant="destructive"
-                on:click={handleDelete}
-              >
-                Delete Function
-              </Button>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cannot Delete Function</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This function cannot be deleted because it is currently
-                    being used by the following consumers:
-                    <ul class="list-disc pl-4 mt-2 space-y-1">
-                      {#each usedByConsumers as consumer}
-                        <li class="font-mono">{consumer.name}</li>
-                      {/each}
-                    </ul>
-                    <p class="mt-2">
-                      Please remove this function from all consumers before
-                      deleting it.
-                    </p>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogAction>OK</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          {/if}
-        </div>
-      </form>
+      </div>
     </div>
-  </div>
+
+    <div class="flex gap-2 pt-2">
+      {#if form.transform.type === "function"}
+        <CopyToClipboard
+          textFn={handleCopyForChatGPT}
+          buttonText="Copy for ChatGPT"
+          successText="Copied to clipboard"
+          buttonVariant="magic"
+          buttonSize="default"
+          className="w-48"
+        />
+      {/if}
+
+      <AlertDialog bind:open={showUpdateDialog}>
+        <Button
+          type="submit"
+          loading={validating || saving}
+          disabled={validating || saving}
+        >
+          <span slot="loading">
+            {#if saving}
+              {isEditMode ? "Updating..." : "Creating..."}
+            {:else}
+              Validating...
+            {/if}
+          </span>
+          {#if isEditMode}
+            Update Function
+          {:else}
+            Create Function
+          {/if}
+        </Button>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update Function</AlertDialogTitle>
+            <AlertDialogDescription>
+              This function is currently being used by the following consumers:
+              <ul class="list-disc pl-4 mt-2 space-y-1">
+                {#each usedByConsumers as consumer}
+                  <li class="font-mono">{consumer.name}</li>
+                {/each}
+              </ul>
+              <p class="mt-2">
+                Are you sure you want to update this function? This may affect
+                the behavior of these consumers.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              on:click={() => {
+                saving = true;
+                pushEvent("save", { transform: form }, () => {
+                  saving = false;
+                });
+              }}
+            >
+              Update Function
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {#if isEditMode}
+        <AlertDialog bind:open={showDeleteDialog}>
+          <Button type="button" variant="destructive" on:click={handleDelete}>
+            Delete Function
+          </Button>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cannot Delete Function</AlertDialogTitle>
+              <AlertDialogDescription>
+                This function cannot be deleted because it is currently being
+                used by the following consumers:
+                <ul class="list-disc pl-4 mt-2 space-y-1">
+                  {#each usedByConsumers as consumer}
+                    <li class="font-mono">{consumer.name}</li>
+                  {/each}
+                </ul>
+                <p class="mt-2">
+                  Please remove this function from all consumers before deleting
+                  it.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction>OK</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      {/if}
+    </div>
+  </form>
 
   <div
     class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
@@ -1203,4 +1195,4 @@ Please help me create or modify the Elixir function transform to achieve the des
       </div>
     </div>
   </div>
-</div>
+</FullPageForm>

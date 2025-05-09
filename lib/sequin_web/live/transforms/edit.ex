@@ -117,7 +117,7 @@ defmodule SequinWeb.TransformsLive.Edit do
       )
       |> assign_databases()
 
-    {:ok, socket}
+    {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
   end
 
   def render(assigns) do
@@ -125,6 +125,7 @@ defmodule SequinWeb.TransformsLive.Edit do
     <div id="transform_new">
       <.svelte
         name="transforms/Edit"
+        ssr={false}
         props={
           %{
             formData: @form_data,
@@ -177,6 +178,12 @@ defmodule SequinWeb.TransformsLive.Edit do
     else
       {:noreply, assign(socket, test_messages: [])}
     end
+  end
+
+  def handle_event("form_closed", _params, socket) do
+    push_navigate(socket, to: ~p"/functions")
+
+    {:noreply, socket}
   end
 
   def handle_event("validate", %{"transform" => params}, socket) do

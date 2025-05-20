@@ -1,6 +1,10 @@
 defmodule Sequin.MiniElixirTest do
   use ExUnit.Case
 
+  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.PathFunction
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.MiniElixir.Validator
   alias Sequin.Functions.MiniElixir.Validator.PatternChecker
 
@@ -576,6 +580,75 @@ defmodule Sequin.MiniElixirTest do
         end
 
       assert get_vars(complex_pattern) == [:c, :first_el, :inner_a, :payload_b, :tail_d]
+    end
+  end
+
+  describe "path functions" do
+    @test_data %Sequin.Consumers.ConsumerEventData{
+      record: %{
+        "house" => "Fremen",
+        "id" => 1,
+        "inserted_at" => ~U[2025-05-23 05:53:26.614862Z],
+        "name" => "Paul Atreides"
+      },
+      record_deserializers: nil,
+      changes: %{"house" => "House Atreides"},
+      changes_deserializers: nil,
+      action: :update,
+      metadata: %{
+        table_schema: "public",
+        table_name: "characters",
+        commit_timestamp: ~U[2025-05-23 05:53:26.614864Z],
+        commit_lsn: 309_018_972_104,
+        database_name: "dune",
+        transaction_annotations: nil,
+        idempotency_key: "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
+        consumer: %Sequin.Consumers.ConsumerEventData.Metadata.Sink{
+          id: "8586edf8-903d-43ca-8f46-015fcfa2e822",
+          name: "my-consumer"
+        }
+      }
+    }
+
+    defp assert_path(path, expected) do
+      assert expected ==
+               MiniElixir.run_interpreted(
+                 %Function{account_id: 1, id: "test", function: %PathFunction{type: :path, path: path}},
+                 @test_data
+               )
+    end
+
+    test "can access nested data structures" do
+      # Test accessing nested record data
+      assert_path("record.name", "Paul Atreides")
+      assert_path("record.house", "Fremen")
+      assert_path("record.id", 1)
+
+      # Test accessing changes
+      assert_path("changes.house", "House Atreides")
+
+      # Test accessing action
+      assert_path("action", "update")
+
+      # Test accessing metadata
+      assert_path("metadata.table_schema", "public")
+      assert_path("metadata.table_name", "characters")
+      assert_path("metadata.database_name", "dune")
+      assert_path("metadata.consumer.name", "my-consumer")
+    end
+
+    test "fails on invalid paths" do
+      assert_raise CaseClauseError, fn ->
+        MiniElixir.run_interpreted(
+          %Function{account_id: 1, id: "test", function: %PathFunction{type: :path, path: "invalid..."}},
+          @test_data
+        )
+      end
+
+      assert_path("record.invalid", nil)
+      assert_path("changes.invalid", nil)
+      assert_path("action.invalid", nil)
+      assert_path("metadata.invalid", nil)
     end
   end
 end

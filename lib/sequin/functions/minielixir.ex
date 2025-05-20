@@ -52,7 +52,7 @@ defmodule Sequin.Functions.MiniElixir do
     end
   end
 
-  def run_interpreted_inner(%Function{id: id, function: %_s{code: code}}, data) do
+  def run_interpreted_inner(%Function{id: id, function: function}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}
@@ -66,9 +66,44 @@ defmodule Sequin.Functions.MiniElixir do
       metadata: Sequin.Map.from_struct_deep(data.metadata)
     ]
 
-    outer = Code.string_to_quoted!(code)
+    unwrapped =
+      if function.type == :path do
+        [variable | path] = String.split(function.path, ".")
 
-    with {:ok, ast} <- Validator.unwrap(outer),
+        # NOTE: Using nil context for the variable definition is crucial
+        variable_atom = String.to_existing_atom(variable)
+        variable = Macro.var(variable_atom, nil)
+
+        quoted =
+          if path == [] do
+            variable
+          else
+            case variable_atom do
+              var when var in [:record, :changes] ->
+                quote do: get_in(unquote(variable), unquote(path))
+
+              :metadata ->
+                try do
+                  quote do
+                    get_in(unquote(variable), unquote(Enum.map(path, &String.to_existing_atom/1)))
+                  end
+                rescue
+                  # If the path contains non-existing atoms, we return nil
+                  ArgumentError ->
+                    quote do: nil
+                end
+
+              :action ->
+                quote do: nil
+            end
+          end
+
+        {:ok, quoted}
+      else
+        function.code |> Code.string_to_quoted!() |> Validator.unwrap()
+      end
+
+    with {:ok, ast} <- unwrapped,
          :ok <- Validator.check(ast) do
       {{answer, _newbindings, _newenv}, _dx} =
         Code.with_diagnostics(fn ->
@@ -236,6 +271,14 @@ defmodule Sequin.Functions.MiniElixir do
     %{type: "Unknown error", info: %{description: Exception.message(error)}}
   end
 
+  def encode_error({error_info, message, _rest}) when is_list(error_info) do
+    %{type: "Syntax error", info: %{description: message}}
+  end
+
+  def encode_error(:validator, error) do
+    %{type: "Validation error", info: %{description: error}}
+  end
+
   defp generate_module_name(id) when is_binary(id) do
     <<"UserFunction.", id::binary>>
   end
@@ -249,6 +292,21 @@ defmodule Sequin.Functions.MiniElixir do
       "#{msg} (line: #{line})"
     else
       _ -> msg
+    end
+  end
+
+  def eval_raw_string(code, field) do
+    with {:ok, ast} <- Code.string_to_quoted(code),
+         :ok <- Validator.check(ast) do
+      try do
+        {result, _} = Code.eval_quoted(ast)
+        {:ok, result}
+      rescue
+        e -> {:error, field, encode_error(e)}
+      end
+    else
+      {:error, error_type, error} -> {:error, field, encode_error(error_type, error)}
+      {:error, error} -> {:error, field, encode_error(error)}
     end
   end
 end
